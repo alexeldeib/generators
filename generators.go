@@ -7,6 +7,7 @@ package generators
 import (
 	"context"
 	"sync"
+	"time"
 )
 
 // Take will receive a value from its inputs count times.
@@ -71,13 +72,13 @@ func Merge(ctx context.Context, channels ...<-chan interface{}) <-chan interface
 }
 
 // OrDone returns a value from its input channel, gracefully allowing cancellation.
-func OrDone(ctx context.Context, in <-chan interface{}) <-chan interface{} {
+func OrDone(done, in <-chan interface{}) <-chan interface{} {
 	out := make(chan interface{})
 	go func() {
 		defer close(out)
 		for {
 			select {
-			case <-ctx.Done():
+			case <-done:
 				return
 			case val, ok := <-in:
 				if !ok {
@@ -85,10 +86,55 @@ func OrDone(ctx context.Context, in <-chan interface{}) <-chan interface{} {
 				}
 				select {
 				case out <- val:
-				case <-ctx.Done():
+				case <-done:
 				}
 			}
 		}
 	}()
 	return out
+}
+
+type workFunc func(done <-chan interface{}, interval time.Duration) (heartbeat <-chan interface{})
+
+// Steward takes a timeout and a long running work function.
+// It watches for heartbeats from the work function, restarting it when none
+// have been received for provided timeout. The steward returns its own
+// heartbeat.
+func Steward(timeout time.Duration, work workFunc) workFunc {
+	return func(done <-chan interface{}, interval time.Duration) <-chan interface{} {
+		heartbeat := make(chan interface{})
+		go func() {
+			defer close(heartbeat)
+			var wardDone chan interface{}
+			var wardHeartbeat <-chan interface{}
+			startWard := func() {
+				wardDone = make(chan interface{})
+				wardHeartbeat = work(OrDone(done, wardDone), timeout/2)
+			}
+			startWard()
+			pulse := time.NewTicker(interval).C
+		loop:
+			for {
+				timeoutSignal := time.After(timeout)
+				for {
+					select {
+					case <-pulse:
+						select {
+						case heartbeat <- struct{}{}:
+						default:
+						}
+					case <-wardHeartbeat:
+						continue loop
+					case <-timeoutSignal:
+						close(wardDone)
+						startWard()
+						continue loop
+					case <-done:
+						return
+					}
+				}
+			}
+		}()
+		return heartbeat
+	}
 }
