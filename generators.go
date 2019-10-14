@@ -94,13 +94,13 @@ func OrDone(done, in <-chan interface{}) <-chan interface{} {
 	return out
 }
 
-type workFunc func(done <-chan interface{}, interval time.Duration) (heartbeat <-chan interface{})
+type WorkFunc func(done <-chan interface{}, interval time.Duration) (heartbeat <-chan interface{})
 
 // Steward takes a timeout and a long running work function.
 // It watches for heartbeats from the work function, restarting it when none
 // have been received for provided timeout. The steward returns its own
 // heartbeat.
-func Steward(timeout time.Duration, work workFunc) workFunc {
+func Steward(timeout time.Duration, work WorkFunc) WorkFunc {
 	return func(done <-chan interface{}, interval time.Duration) <-chan interface{} {
 		heartbeat := make(chan interface{})
 		go func() {
