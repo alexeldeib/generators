@@ -5,19 +5,18 @@ It pulls directly from Concurrency in Go by Katherine Cox-Buday, with minor modi
 package generators
 
 import (
-	"context"
 	"sync"
 	"time"
 )
 
 // Take will receive a value from its inputs count times.
-func Take(ctx context.Context, in <-chan interface{}, count int) <-chan interface{} {
+func Take(done, in <-chan interface{}, count int) <-chan interface{} {
 	out := make(chan interface{})
 	go func() {
 		defer close(out)
 		for i := 0; i < count; i++ {
 			select {
-			case <-ctx.Done():
+			case <-done:
 				return
 			case out <- <-in:
 			}
@@ -27,13 +26,13 @@ func Take(ctx context.Context, in <-chan interface{}, count int) <-chan interfac
 }
 
 // Repeat streams the results of repeated invocations of fn to an output channel.
-func Repeat(ctx context.Context, fn func() interface{}) <-chan interface{} {
+func Repeat(done <-chan interface{}, fn func() interface{}) <-chan interface{} {
 	out := make(chan interface{})
 	go func() {
 		defer close(out)
 		for {
 			select {
-			case <-ctx.Done():
+			case <-done:
 				return
 			case out <- fn():
 			}
@@ -43,7 +42,7 @@ func Repeat(ctx context.Context, fn func() interface{}) <-chan interface{} {
 }
 
 // Merge takes a list of channels and merges them to a single output channel.
-func Merge(ctx context.Context, channels ...<-chan interface{}) <-chan interface{} {
+func Merge(done <-chan interface{}, channels ...<-chan interface{}) <-chan interface{} {
 	var wg sync.WaitGroup
 	out := make(chan interface{})
 
@@ -51,7 +50,7 @@ func Merge(ctx context.Context, channels ...<-chan interface{}) <-chan interface
 		defer wg.Done()
 		for val := range in {
 			select {
-			case <-ctx.Done():
+			case <-done:
 				return
 			case out <- val:
 			}
