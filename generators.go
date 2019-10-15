@@ -1,6 +1,6 @@
 /*
 This package provides a few utility generators.
-It pulls directly from Concurrency in Go by Katherine Cox-Buday, with minor modiciations.
+It pulls directly from Concurrency in Go by Katherine Cox-Buday, which itself mirrors https://blog.golang.org/pipelines quite closely.
 */
 package generators
 
